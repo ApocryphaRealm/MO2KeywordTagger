@@ -1,4 +1,4 @@
-"""MO2 [NoDelete] Tag Generator - a Mod Organizer 2 plugin.
+﻿"""MO2 [NoDelete] Tag Generator - a Mod Organizer 2 plugin.
 
 One toolbar button that gives mods the [NoDelete] tag Wabbajack keeps across list updates, numbered in list order:
 whatever is selected, plus every mod under a separator named NoDelete. One dialog shows every rename before it
@@ -7,7 +7,7 @@ number the same way. Tagged mods remember the separator they were tagged under a
 
 Copyright (C) 2026 ApocryphaRealm. GPL-3.0-or-later - see LICENSE and NOTICE.md.
 """
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 import json
 import os
@@ -18,7 +18,7 @@ from typing import List, Optional, Dict
 
 import mobase
 
-# Qt imports (same as before) …
+# Qt imports (same as before) â€¦
 try:
     from PyQt6.QtCore import Qt, QTimer, QSize
     from PyQt6.QtGui import QAction, QIcon, QPainter, QColor, QPixmap, QFont
@@ -526,7 +526,9 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
         except Exception:
             full_order = list(ml.allMods())
         sel = self._get_selected_mods_from_ui()
-        tagged = [nm for nm in full_order if nm.lower().startswith(TAG_PREFIX.lower())]
+        # A separator is never renamed: the NoDelete separator itself is named "[NoDelete]" and must stay exactly that
+        # (1.0.1 - the 1.0.0 preview offered "[NoDelete]_separator -> [NoDelete] 0001 _separator").
+        tagged = [nm for nm in full_order if nm.lower().startswith(TAG_PREFIX.lower()) and not is_separator(nm)]
         sep_all = mods_under_nodelete_separators(full_order)
         sep_untagged = [nm for nm in sep_all if not nm.lower().startswith(TAG_PREFIX.lower())]
         has_sep = any(is_nodelete_separator(nm) for nm in full_order)

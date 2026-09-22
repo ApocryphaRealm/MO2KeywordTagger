@@ -2,6 +2,11 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
+## 1.0.1 - 2026-09-22
+
+* A separator is never renamed. 1.0.0 counted the NoDelete separator itself (named `[NoDelete]`) as a tagged mod
+  and offered to renumber it into `[NoDelete] 0001 _separator`, which would have broken the separator.
+
 ## 1.0.0 - 2026-09-22 - first release
 
 * One toolbar button (the Wabbajack mark) and one dialog: action, plugin-type tags, separator options, a live

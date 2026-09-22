@@ -40,6 +40,9 @@ Documents\MO2 NoDelete Tag Generator\separator-map.json and log.txt; the backups
 WHAT CHANGED
 ------------
 
+Version 1.0.1
+A separator is never renamed; 1.0.0 offered to renumber the NoDelete separator itself.
+
 Version 1.0.0
 First release.
 
