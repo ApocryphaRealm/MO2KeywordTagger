@@ -1,6 +1,6 @@
 MO2 [NoDelete] Tag Generator
 ============================
-Version 1.0.0
+Version 1.0.1
 
 A Mod Organizer 2 plugin: one toolbar button that gives mods Wabbajack's [NoDelete] tag with a
 number in list order, and takes it away again. One dialog, one rename pass, one refresh.
@@ -43,7 +43,7 @@ WHAT CHANGED
 Version 1.0.1
 A separator is never renamed; 1.0.0 offered to renumber the NoDelete separator itself.
 
-Version 1.0.0
+Version 1.0.1
 First release.
 
 CREDIT
