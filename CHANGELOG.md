@@ -2,6 +2,13 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
+## 1.0.2 - 2026-09-23
+
+* The plugin-type tags `[ESM]` `[ESP]` `[ESL]` are independent of `[NoDelete]`, like `[Patch]` (the owner: "it
+  shouldn't require me to tag nodelete just to tag it as esm, esl, esp"). *Add / update* tags every mod that ships a
+  plugin - `[ESP] Name`, `[ESP] [Patch] Name` - and *Remove* strips the tag from every mod, whatever its NoDelete
+  state; a plugin-type tag is recognised wherever it sits in a name.
+
 ## 1.0.1 - 2026-09-23
 
 * Renamed to **MO2 Keyword Tagger** and MO2 Patch Tagger folded in (the owner, 2026-09-23). `[Patch]` is a link of

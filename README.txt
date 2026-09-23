@@ -1,6 +1,6 @@
 MO2 Keyword Tagger
 ==================
-Version 1.0.1
+Version 1.0.2
 
 A Mod Organizer 2 plugin: one toolbar button and one dialog for the keyword tags in mod names -
 [NoDelete] with a number in list order (Wabbajack's convention), the plugin-type tags [ESM] [ESP]
@@ -12,8 +12,9 @@ THIS IS NOT A MOD. Do not install it with the mod manager.
 THE TAG CHAIN
 -------------
 [NoDelete] 0001 [ESM] [Patch] Name   a NoDelete mod: tag, number, plugin type, Patch, name
-[Patch] Name                         any other mod that is a patch
-Removing a keyword removes only that link; the mod's own name is never touched.
+[ESP] [Patch] Name                   any other mod: plugin type, Patch, name
+Each keyword is independent of the others; removing one removes only that link, and the mod's
+own name is never touched.
 
 REQUIREMENTS
 ------------
@@ -32,10 +33,11 @@ USE
   separator named "NoDelete" and press it with nothing selected: every untagged mod there gets
   the tag, and every tagged mod is renumbered in list order. Remove tag and number: for the
   selected tagged mods, or tick "from every tagged mod". A separator is never renamed.
-- Keyword tags (top right), two rows of Keep / Add-update / Remove:
+- Keyword tags (top right), two rows of Keep / Add-update / Remove, each for EVERY mod in the
+  list whether or not it carries [NoDelete]:
   plugin type ([ESM] [ESP] [ESL]) read from the plugin files;
-  [Patch] for every mod in the list - added when a plugin header says patch, a plugin file
-  name does, the mod name does, or the MO2 category is Patches; existing tags are kept.
+  [Patch] - added when a plugin header says patch, a plugin file name does, the mod name does,
+  or the MO2 category is Patches; existing tags are kept.
 - Separators: move tagged mods back under the separator they were tagged under; save the
   current separators as their home.
 - The preview lists every rename before Apply; the result shows in the same window.
@@ -53,6 +55,11 @@ plugins\data\faults.log (Python's fault handler, so a crash names the plugin and
 
 WHAT CHANGED
 ------------
+
+Version 1.0.2
+The plugin-type tags ([ESM] [ESP] [ESL]) are independent of [NoDelete], like [Patch]: Add /
+update tags every mod that ships a plugin, Remove strips the tag from every mod, whatever the
+mod's NoDelete state.
 
 Version 1.0.1
 MO2 Patch Tagger folded in: [Patch] joins the keyword chain with its own Keep / Add / Remove

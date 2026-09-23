@@ -1,4 +1,4 @@
-"""MO2 Keyword Tagger - a Mod Organizer 2 plugin.
+﻿"""MO2 Keyword Tagger - a Mod Organizer 2 plugin.
 
 One toolbar button that gives mods the [NoDelete] tag Wabbajack keeps across list updates, numbered in list order:
 whatever is selected, plus every mod under a separator named NoDelete. One dialog shows every rename before it
@@ -7,7 +7,7 @@ number the same way. Tagged mods remember the separator they were tagged under a
 
 Copyright (C) 2026 ApocryphaRealm. GPL-3.0-or-later - see LICENSE and NOTICE.md.
 """
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 import json
 import os
@@ -19,7 +19,7 @@ from typing import List, Optional, Dict
 
 import mobase
 
-# Qt imports (same as before) â€¦
+# Qt imports (same as before) Ã¢â‚¬Â¦
 try:
     from PyQt6.QtCore import Qt, QTimer, QSize
     from PyQt6.QtGui import QAction, QIcon, QPainter, QColor, QPixmap, QFont
@@ -234,9 +234,17 @@ def patch_signals(name: str, mod_path: str, categories) -> List[str]:
     return reasons
 
 
+PLUGIN_TYPE_ANY_RE = re.compile(r'\[(ESM|ESP|ESL|ESM\+ESP|ESM\+ESL|ESP\+ESL|ESM\+ESP\+ESL)\]\s*', re.IGNORECASE)
+
+
 def strip_plugin_type_tag(name: str) -> str:
-    """Remove plugin type tag like [ESM], [ESP], etc. from the beginning of a name."""
-    return PLUGIN_TYPE_RE.sub("", name).strip()
+    """Remove every plugin type tag ([ESM], [ESP], [ESL], combinations) wherever it sits."""
+    return re.sub(r"\s{2,}", " ", PLUGIN_TYPE_ANY_RE.sub("", name)).strip()
+
+
+def existing_plugin_type(name: str) -> str:
+    m = PLUGIN_TYPE_ANY_RE.search(name)
+    return m.group(1).upper() if m else ""
 
 
 def get_plugin_flags(file_path: str) -> Dict[str, bool]:
@@ -361,9 +369,11 @@ def format_tag(name: str, pos: int, plugin_type: str = "", patch: bool = False) 
     return f"{TAG_PREFIX} {seq} {chain}{name}"
 
 
-def format_plain(name: str, patch: bool) -> str:
-    """A name outside NoDelete: "[Patch] Name" or the bare name."""
-    return f"{PATCH_TAG} {name}" if patch else name
+def format_plain(name: str, patch: bool, plugin_type: str = "") -> str:
+    """A name outside NoDelete: the keyword chain - plugin type, then [Patch] - then the mod's own name. The plugin
+    type tags are independent of NoDelete (the owner, 2026-09-23), the same as [Patch]."""
+    chain = (f"[{plugin_type}] " if plugin_type else "") + (f"{PATCH_TAG} " if patch else "")
+    return f"{chain}{name}"
 
 
 def make_fallback_icon() -> QIcon:
@@ -420,7 +430,7 @@ class KeywordDialog(QDialog):
 
         pt = QGroupBox("Keyword tags ([ESM] [ESP] [ESL] and [Patch])")
         pl = QVBoxLayout(pt)
-        pl.addWidget(QLabel("Plugin type ([ESM] [ESP] [ESL]):"))
+        pl.addWidget(QLabel("Plugin type ([ESM] [ESP] [ESL]) - every mod in the list, tagged or not:"))
         self.r_pt_keep = QRadioButton("Keep as they are")
         self.r_pt_add = QRadioButton("Add / update from the plugin files")
         self.r_pt_strip = QRadioButton("Remove")
@@ -483,7 +493,7 @@ class KeywordDialog(QDialog):
         st = self._p.read_state()
         self._st = st
         self.summary.setText(
-            f"{len(st['full_order'])} entries in the list - {len(st['tagged'])} carry [NoDelete] - {len(st['patched'])} carry [Patch] - "
+            f"{len(st['full_order'])} entries in the list - {len(st['tagged'])} carry [NoDelete] - {len(st['patched'])} carry [Patch] - {len(st['typed'])} carry a plugin-type tag - "
             f"{len(st['sel'])} selected - {len(st['sep_all'])} under a NoDelete separator "
             f"({len(st['sep_untagged'])} of them untagged)"
             + ("" if st['sep_all'] or st['has_sep'] else " - no separator named NoDelete in the list"))
@@ -510,7 +520,7 @@ class KeywordDialog(QDialog):
         o = self.options()
         self.c_remove_all.setEnabled(o["action"] == "remove")
         for w in (self.r_pt_keep, self.r_pt_add, self.r_pt_strip):
-            w.setEnabled(o["action"] == "tag")
+            w.setEnabled(True)                       # independent of the NoDelete action, like [Patch] (2026-09-23)
         pairs = self._p.plan(self._st, o)
         self._pairs = pairs
         self.table.setRowCount(len(pairs))
@@ -635,6 +645,7 @@ class KeywordTagger(mobase.IPluginTool):
         # (1.0.1 - the 1.0.0 preview offered "[NoDelete]_separator -> [NoDelete] 0001 _separator").
         tagged = [nm for nm in full_order if nm.lower().startswith(TAG_PREFIX.lower()) and not is_separator(nm)]
         patched = [nm for nm in full_order if has_patch_tag(nm) and not is_separator(nm)]
+        typed = [nm for nm in full_order if existing_plugin_type(nm) and not is_separator(nm)]
         sep_all = mods_under_nodelete_separators(full_order)
         sep_untagged = [nm for nm in sep_all if not nm.lower().startswith(TAG_PREFIX.lower())]
         has_sep = any(is_nodelete_separator(nm) for nm in full_order)
@@ -652,7 +663,7 @@ class KeywordTagger(mobase.IPluginTool):
             home = divider_map.get(get_base_mod_name(nm))
             if home and home in full_order and current.get(nm) != home:
                 out_of_place.append((nm, home))
-        return {"full_order": full_order, "sel": sel, "tagged": tagged, "patched": patched, "sep_all": sep_all,
+        return {"full_order": full_order, "sel": sel, "tagged": tagged, "patched": patched, "typed": typed, "sep_all": sep_all,
                 "sep_untagged": sep_untagged, "has_sep": has_sep, "out_of_place": out_of_place,
                 "divider_map": divider_map}
 
@@ -660,6 +671,19 @@ class KeywordTagger(mobase.IPluginTool):
         """[(old name, new name)] for the chosen action - nothing is touched here."""
         full_order, tagged, sel = st["full_order"], st["tagged"], st["sel"]
         ml = self._organizer.modList()
+
+        def ptype_for(nm: str) -> str:
+            """The plugin-type tag nm carries after this run, under the plugin-type option."""
+            mode = o.get("plugin_types", "keep")
+            if mode == "remove":
+                return ""
+            if mode == "add":
+                mod = ml.getMod(nm)
+                try:
+                    return get_mod_plugin_types(mod.absolutePath()) if mod else existing_plugin_type(nm)
+                except Exception:  # noqa: BLE001
+                    return existing_plugin_type(nm)
+            return existing_plugin_type(nm)
 
         def patch_for(nm: str, current: bool) -> bool:
             """Whether nm carries [Patch] after this run, under the [Patch] option."""
@@ -684,15 +708,15 @@ class KeywordTagger(mobase.IPluginTool):
             pairs = []
             for nm in chosen:
                 base = get_base_mod_name(nm)
-                new = format_plain(base, patch_for(nm, has_patch_tag(nm)))
+                new = format_plain(base, patch_for(nm, has_patch_tag(nm)), ptype_for(nm))
                 if base and new != nm:
                     pairs.append((nm, new))
             done = {old for old, _ in pairs}
-            if o.get("patch", "keep") != "keep":
+            if o.get("patch", "keep") != "keep" or o.get("plugin_types", "keep") != "keep":
                 for nm in full_order:
                     if is_separator(nm) or nm in done or nm.lower().startswith(TAG_PREFIX.lower()):
                         continue
-                    new = format_plain(strip_patch_tag(nm), patch_for(nm, has_patch_tag(nm)))
+                    new = format_plain(strip_patch_tag(strip_plugin_type_tag(nm)), patch_for(nm, has_patch_tag(nm)), ptype_for(nm))
                     if new != nm:
                         pairs.append((nm, new))
             return pairs
@@ -706,23 +730,17 @@ class KeywordTagger(mobase.IPluginTool):
             m = re.match(r'^\[NoDelete\]\s*\d{4}\s+(?:\[(ESM|ESP|ESL|ESM\+ESP|ESM\+ESL|ESP\+ESL|ESM\+ESP\+ESL)\]\s+)?', nm, re.IGNORECASE)
             if m and m.group(1):
                 existing = m.group(1)
-            if o["plugin_types"] == "add":
-                mod = ml.getMod(nm)
-                ptype = get_mod_plugin_types(mod.absolutePath()) if mod else existing
-            elif o["plugin_types"] == "remove":
-                ptype = ""
-            else:
-                ptype = existing
+            ptype = ptype_for(nm)
             new = format_tag(base, i, ptype, patch_for(nm, has_patch_tag(nm)))
             if new != nm:
                 pairs.append((nm, new))
-        # [Patch] on every other mod in the list, as a prefix (MO2 Patch Tagger's convention, kept)
-        if o.get("patch", "keep") != "keep":
+        # the plugin-type and [Patch] keywords on every other mod in the list, as a prefix chain
+        if o.get("patch", "keep") != "keep" or o.get("plugin_types", "keep") != "keep":
             handled = set(to_process)
             for nm in full_order:
                 if is_separator(nm) or nm in handled:
                     continue
-                new = format_plain(strip_patch_tag(nm), patch_for(nm, has_patch_tag(nm)))
+                new = format_plain(strip_patch_tag(strip_plugin_type_tag(nm)), patch_for(nm, has_patch_tag(nm)), ptype_for(nm))
                 if new != nm:
                     pairs.append((nm, new))
         return pairs
