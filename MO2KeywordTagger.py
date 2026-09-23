@@ -584,7 +584,8 @@ class KeywordTagger(mobase.IPluginTool):
                 "patch (header, file name, mod name or category). One on-disk rename pass, one refresh; removes them the same way.")
 
     def version(self) -> mobase.VersionInfo:
-        return mobase.VersionInfo(1, 0, 0, mobase.ReleaseType.FINAL)
+        major, minor, patch = (int(x) for x in __version__.split("."))
+        return mobase.VersionInfo(major, minor, patch, mobase.ReleaseType.FINAL)
 
     def isActive(self) -> bool:
         return True

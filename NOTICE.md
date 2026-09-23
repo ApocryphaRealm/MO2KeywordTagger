@@ -1,4 +1,4 @@
-# MO2 [NoDelete] Tag Generator - copyright and licence
+# MO2 Keyword Tagger - copyright and licence
 
 Copyright (C) 2026 ApocryphaRealm
 
