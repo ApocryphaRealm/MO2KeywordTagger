@@ -11,10 +11,11 @@ THIS IS NOT A MOD. Do not install it with the mod manager.
 
 THE TAG CHAIN
 -------------
-[NoDelete] 0001 [ESM] [Patch] Name   a NoDelete mod: tag, number, plugin type, Patch, name
-[ESP] [Patch] Name                   any other mod: plugin type, Patch, name
-Each keyword is independent of the others; removing one removes only that link, and the mod's
-own name is never touched.
+[NoDelete] 0001 Name [ESM] [Patch]   a NoDelete mod: tag and number in front, the rest after the name
+Name [ESP] [Patch]                   any other mod: plugin type, then Patch, after the name
+[NoDelete] and its number are the only prefix; every other keyword is a suffix. Each keyword is
+independent of the others; removing one removes only that link, and the mod's own name is never
+touched.
 
 REQUIREMENTS
 ------------
@@ -29,12 +30,12 @@ delete their .py and .png files - this plugin replaces both.
 
 USE
 ---
-- Action (left): Tag and renumber - select mods and press the button, or put mods under a
-  separator named "NoDelete" and press it with nothing selected: every untagged mod there gets
-  the tag, and every tagged mod is renumbered in list order. Remove tag and number: for the
-  selected tagged mods, or tick "from every tagged mod". A separator is never renamed.
-- Keyword tags (top right), two rows of Keep / Add-update / Remove, each for EVERY mod in the
-  list whether or not it carries [NoDelete]:
+- Keyword tags (top right): a Keep / Add-update / Remove row for each keyword, each independent
+  of the others and each acting on every mod in the list:
+  [NoDelete] and its number - Add / renumber: select mods and press the button, or put mods
+  under a separator named "NoDelete" and press it with nothing selected: every untagged mod
+  there gets the tag, and every tagged mod is renumbered in list order. Remove: the selected
+  tagged mods, or tick "from every tagged mod". A separator is never renamed.
   plugin type ([ESM] [ESP] [ESL]) read from the plugin files;
   [Patch] - added when a plugin header says patch, a plugin file name does, the mod name does,
   or the MO2 category is Patches; existing tags are kept.

@@ -4,10 +4,16 @@ Versions are issued by the project's version gate. Written as the change happens
 
 ## 1.0.2 - 2026-09-23
 
+* `[NoDelete]` is the only prefix; the plugin-type tag and `[Patch]` are suffixes after the mod's own name (the
+  owner: "i want nodelete to be the only tag that is a prefix, the other tags are suffixes"): `Name [ESP] [Patch]`,
+  `[NoDelete] 0001 Name [ESM] [Patch]`. Every keyword is recognised wherever it sits, so names in the older prefix
+  form are read and rewritten.
+* `[NoDelete]` is a row of the keyword group like the others - *Keep / Add-renumber / Remove* - so any one keyword
+  can be chosen on its own (the owner: "add a nodelete tag option ... so you can choose to select only that tag").
+  On *Keep*, tagged mods keep their number while the other keywords change.
 * The plugin-type tags `[ESM]` `[ESP]` `[ESL]` are independent of `[NoDelete]`, like `[Patch]` (the owner: "it
-  shouldn't require me to tag nodelete just to tag it as esm, esl, esp"). *Add / update* tags every mod that ships a
-  plugin - `[ESP] Name`, `[ESP] [Patch] Name` - and *Remove* strips the tag from every mod, whatever its NoDelete
-  state; a plugin-type tag is recognised wherever it sits in a name.
+  shouldn't require me to tag nodelete just to tag it as esm, esl, esp"): *Add / update* tags every mod that ships a
+  plugin and *Remove* strips the tag from every mod, whatever its NoDelete state.
 
 ## 1.0.1 - 2026-09-23
 

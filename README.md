@@ -12,25 +12,25 @@ into one tool (2026-09-23).
 A name carries its keywords as a chain in front of the mod's own name:
 
 ```
-[NoDelete] 0001 [ESM] [Patch] Name      a NoDelete mod: tag, number, plugin type, Patch, name
-[ESP] [Patch] Name                      any other mod: plugin type, Patch, name
+[NoDelete] 0001 Name [ESM] [Patch]      a NoDelete mod: the tag and number in front, the other keywords after the name
+Name [ESP] [Patch]                      any other mod: plugin type, then Patch, after the name
 ```
 
-Each keyword is independent of the others: the plugin-type tags and `[Patch]` go on any mod, tagged with
-`[NoDelete]` or not. Removing a keyword removes only that link; the mod's own name is never touched.
+`[NoDelete]` and its number are the only prefix; every other keyword is a suffix. Each keyword is independent of
+the others - the dialog has a *Keep / Add-update / Remove* row for each, and each row acts on every mod in the list.
+Removing a keyword removes only that link; the mod's own name is never touched.
 
 ## What the button does
 
 Press it and one window opens:
 
-* **Action** (left) - *Tag and renumber* or *Remove tag and number* for `[NoDelete]`. Tagging covers whatever is
-  selected in the mod list **and every mod under a separator named NoDelete** (spelled "NoDelete", "No Delete",
-  "[NoDelete]" - any case), and renumbers every already-tagged mod so the numbers follow the list. Removing covers the
-  selected tagged mods, or every tagged mod with one tick. A separator is never renamed.
-* **Keyword tags** (top right) - two rows of *Keep / Add-update / Remove*, each for **every mod in the list**,
-  tagged with `[NoDelete]` or not:
-  * plugin type: `[ESM]` `[ESP]` `[ESL]` `[ESP+ESL]` ... read from the plugin files in the mod;
-  * `[Patch]`: *Add / update* tags a mod when a plugin's header
+* **Keyword tags** (top right) - a *Keep / Add-update / Remove* row for each keyword, each independent of the others:
+  * `[NoDelete]` and its number: *Add / renumber* covers whatever is selected in the mod list **and every mod under a
+    separator named NoDelete** (spelled "NoDelete", "No Delete", "[NoDelete]" - any case), and renumbers every
+    already-tagged mod so the numbers follow the list; *Remove* covers the selected tagged mods, or every tagged mod
+    with one tick. A separator is never renamed.
+  * plugin type: `[ESM]` `[ESP]` `[ESL]` `[ESP+ESL]` ... read from the plugin files, for every mod in the list;
+  * `[Patch]`, for every mod in the list: *Add / update* tags a mod when a plugin's header
     description says patch, a plugin's file name does, the mod's own name does, or its MO2 category is Patches;
     existing tags stay. *Remove* strips `[Patch]` everywhere.
 * **Separators** - move tagged mods back under the separator they were tagged under; save the current separators as
