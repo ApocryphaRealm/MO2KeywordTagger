@@ -361,19 +361,20 @@ def strip_leading_numbers(name: str) -> str:
     return name
 
 
+def keyword_suffix(plugin_type: str = "", patch: bool = False) -> str:
+    """The suffix keywords after the mod's own name: the plugin type, then [Patch] (the owner, 2026-09-23: "nodelete
+    to be the only tag that is a prefix, the other tags are suffixes")."""
+    return (f" [{plugin_type}]" if plugin_type else "") + (f" {PATCH_TAG}" if patch else "")
+
+
 def format_tag(name: str, pos: int, plugin_type: str = "", patch: bool = False) -> str:
-    """A NoDelete name: the tag, the number, then the keyword chain - plugin type first, [Patch] after it (the owner,
-    2026-09-23: "the patch keyword added to the end like the esm, esl tags") - then the mod's own name."""
-    seq = f"{pos:04d}"
-    chain = (f"[{plugin_type}] " if plugin_type else "") + (f"{PATCH_TAG} " if patch else "")
-    return f"{TAG_PREFIX} {seq} {chain}{name}"
+    """A NoDelete name: "[NoDelete] 0001 Name [ESM] [Patch]" - the tag and number in front, every other keyword after."""
+    return f"{TAG_PREFIX} {pos:04d} {name}{keyword_suffix(plugin_type, patch)}"
 
 
 def format_plain(name: str, patch: bool, plugin_type: str = "") -> str:
-    """A name outside NoDelete: the keyword chain - plugin type, then [Patch] - then the mod's own name. The plugin
-    type tags are independent of NoDelete (the owner, 2026-09-23), the same as [Patch]."""
-    chain = (f"[{plugin_type}] " if plugin_type else "") + (f"{PATCH_TAG} " if patch else "")
-    return f"{chain}{name}"
+    """A name outside NoDelete: "Name [ESP] [Patch]"."""
+    return f"{name}{keyword_suffix(plugin_type, patch)}"
 
 
 def make_fallback_icon() -> QIcon:
@@ -417,19 +418,21 @@ class KeywordDialog(QDialog):
         root.addWidget(self.summary)
 
         row = QHBoxLayout()
-        act = QGroupBox("Action")
-        al = QVBoxLayout(act)
-        self.r_tag = QRadioButton("Tag and renumber (selected mods, the NoDelete separator's contents, and every tagged mod's number)")
-        self.r_remove = QRadioButton("Remove tag and number")
-        self.r_tag.setChecked(True)
-        al.addWidget(self.r_tag)
-        al.addWidget(self.r_remove)
-        self.c_remove_all = QCheckBox("from every tagged mod, not only the selected ones")
-        al.addWidget(self.c_remove_all)
-        row.addWidget(act, 3)
-
-        pt = QGroupBox("Keyword tags ([ESM] [ESP] [ESL] and [Patch])")
+        pt = QGroupBox("Keyword tags - each row is its own choice: [NoDelete], the plugin type, [Patch]")
         pl = QVBoxLayout(pt)
+        # [NoDelete] is a keyword like the others (the owner, 2026-09-23: "add a nodelete tag option to select in the
+        # top right corner with the other tags so you can choose to select only that tag")
+        pl.addWidget(QLabel("[NoDelete] and its number:"))
+        self.r_nd_keep = QRadioButton("Keep as it is")
+        self.r_tag = QRadioButton("Add / renumber: the selected mods, the NoDelete separator's contents, and every tagged mod's number")
+        self.r_remove = QRadioButton("Remove tag and number from the selected tagged mods")
+        self.r_nd_keep.setChecked(True)
+        nd_group = QButtonGroup(pt)
+        for w in (self.r_nd_keep, self.r_tag, self.r_remove):
+            nd_group.addButton(w)
+            pl.addWidget(w)
+        self.c_remove_all = QCheckBox("    ... from every tagged mod, not only the selected ones")
+        pl.addWidget(self.c_remove_all)
         pl.addWidget(QLabel("Plugin type ([ESM] [ESP] [ESL]) - every mod in the list, tagged or not:"))
         self.r_pt_keep = QRadioButton("Keep as they are")
         self.r_pt_add = QRadioButton("Add / update from the plugin files")
@@ -448,7 +451,7 @@ class KeywordDialog(QDialog):
         for w in (self.r_patch_keep, self.r_patch_add, self.r_patch_strip):
             patch_group.addButton(w)
             pl.addWidget(w)
-        row.addWidget(pt, 2)
+        row.addWidget(pt, 1)
         root.addLayout(row)
 
         sep = QGroupBox("Separators")
@@ -481,7 +484,7 @@ class KeywordDialog(QDialog):
         buttons.addWidget(self.b_close)
         root.addLayout(buttons)
 
-        for w in (self.r_tag, self.r_remove, self.c_remove_all, self.r_pt_keep, self.r_pt_add, self.r_pt_strip,
+        for w in (self.r_nd_keep, self.r_tag, self.r_remove, self.c_remove_all, self.r_pt_keep, self.r_pt_add, self.r_pt_strip,
                   self.r_patch_keep, self.r_patch_add, self.r_patch_strip, self.c_restore, self.c_update_map):
             w.toggled.connect(self.refresh_preview)
         self.b_apply.clicked.connect(self.apply)
@@ -508,7 +511,7 @@ class KeywordDialog(QDialog):
         pt = "add" if self.r_pt_add.isChecked() else "remove" if self.r_pt_strip.isChecked() else "keep"
         patch = "add" if self.r_patch_add.isChecked() else "remove" if self.r_patch_strip.isChecked() else "keep"
         return {
-            "action": "remove" if self.r_remove.isChecked() else "tag",
+            "action": "remove" if self.r_remove.isChecked() else "tag" if self.r_tag.isChecked() else "keep",
             "remove_all": self.c_remove_all.isChecked(),
             "plugin_types": pt,
             "patch": patch,
@@ -721,11 +724,14 @@ class KeywordTagger(mobase.IPluginTool):
                         pairs.append((nm, new))
             return pairs
         newly = [nm for nm in full_order if (nm in sel or nm in st["sep_untagged"]) and nm not in tagged
-                 and not is_separator(nm)]
+                 and not is_separator(nm)] if o["action"] == "tag" else []
         to_process = [nm for nm in full_order if nm in tagged or nm in newly]
         pairs = []
         for i, nm in enumerate(to_process, start=1):
             base = get_base_mod_name(nm)
+            if o["action"] == "keep":                          # [NoDelete] untouched: the number it has stays
+                mnum = re.match(r'^\s*\[NoDelete\]\s*(\d{4})', nm, re.IGNORECASE)
+                i = int(mnum.group(1)) if mnum else i
             existing = ""
             m = re.match(r'^\[NoDelete\]\s*\d{4}\s+(?:\[(ESM|ESP|ESL|ESM\+ESP|ESM\+ESL|ESP\+ESL|ESM\+ESP\+ESL)\]\s+)?', nm, re.IGNORECASE)
             if m and m.group(1):
