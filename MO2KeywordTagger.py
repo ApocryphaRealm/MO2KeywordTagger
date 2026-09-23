@@ -1,4 +1,4 @@
-﻿"""MO2 [NoDelete] Tag Generator - a Mod Organizer 2 plugin.
+"""MO2 Keyword Tagger - a Mod Organizer 2 plugin.
 
 One toolbar button that gives mods the [NoDelete] tag Wabbajack keeps across list updates, numbered in list order:
 whatever is selected, plus every mod under a separator named NoDelete. One dialog shows every rename before it
@@ -12,6 +12,7 @@ __version__ = "1.0.1"
 import json
 import os
 import re
+import struct
 import threading
 import time
 from typing import List, Optional, Dict
@@ -35,6 +36,7 @@ try:
         QHBoxLayout,
         QLabel,
         QRadioButton,
+        QButtonGroup,
         QGroupBox,
         QCheckBox,
         QTableWidget,
@@ -60,6 +62,7 @@ except Exception:
         QHBoxLayout,
         QLabel,
         QRadioButton,
+        QButtonGroup,
         QGroupBox,
         QCheckBox,
         QTableWidget,
@@ -76,6 +79,9 @@ TAG_PREFIX = "[NoDelete]"
 TAG_RE = re.compile(r'^\s*\[NoDelete\]\s*(\d{4}\s*)?(\*\s*)?', re.IGNORECASE)
 # Match plugin type tags like [ESM], [ESP], [ESL], [ESM+ESP], [ESP+ESL], etc.
 PLUGIN_TYPE_RE = re.compile(r'^\s*\[(ESM|ESP|ESL|ESM\+ESP|ESM\+ESL|ESP\+ESL|ESM\+ESP\+ESL)\]\s*', re.IGNORECASE)
+PATCH_TAG = "[Patch]"
+PATCH_TAG_RE = re.compile(r'^\s*\[Patch\]\s*', re.IGNORECASE)
+_PATCH_WORD = re.compile(r"(?<![a-z])patch(?:es)?(?![a-z])", re.I)
 LEADING_NUM_RE = re.compile(r'^\s*\d+\s*[-_ ]*\s*')
 LEADING_PERIOD_RE = re.compile(r'^\.+\s*')
 
@@ -83,9 +89,14 @@ LEADING_PERIOD_RE = re.compile(r'^\.+\s*')
 def get_data_folder():
     """The plugin's own folder in Documents: the separator map and the log survive a Wabbajack reinstall there."""
     docs = os.path.expanduser("~/Documents")
-    data_folder = os.path.join(docs, "MO2 NoDelete Tag Generator")
+    data_folder = os.path.join(docs, "MO2 Keyword Tagger")
+    old_folder = os.path.join(docs, "MO2 NoDelete Tag Generator")
     if not os.path.exists(data_folder):
-        os.makedirs(data_folder)
+        if os.path.isdir(old_folder):
+            import shutil
+            shutil.copytree(old_folder, data_folder)          # the separator map carries over from the old name
+        else:
+            os.makedirs(data_folder)
     return data_folder
 
 # Divider map file path (in Documents folder)
@@ -147,10 +158,80 @@ def save_divider_map(divider_map: Dict[str, str]) -> None:
 
 
 def get_base_mod_name(mod_name: str) -> str:
-    """Get the base mod name without the [NoDelete] tag, number, and plugin type."""
+    """Get the base mod name without the [NoDelete] tag, number, plugin type and [Patch] keyword."""
     name = strip_existing_tag(mod_name)
     name = strip_plugin_type_tag(name)
+    name = strip_patch_tag(name)
     return strip_leading_numbers(name)
+
+
+def strip_patch_tag(name: str) -> str:
+    """Remove every [Patch] keyword, wherever an older tool put it (MO2 Patch Tagger prefixed it)."""
+    out = re.sub(re.escape(PATCH_TAG), "", name, flags=re.I)
+    return re.sub(r"\s{2,}", " ", out).strip()
+
+
+def has_patch_tag(name: str) -> bool:
+    return PATCH_TAG.lower() in name.lower()
+
+
+def says_patch(text: str) -> bool:
+    return bool(text) and _PATCH_WORD.search(text) is not None
+
+
+def read_plugin_description(path: str) -> str:
+    """The SNAM description text from a plugin's TES4 header ('' when unreadable) - patches say so there."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(24)
+            if len(head) < 24 or head[:4] != b"TES4":
+                return ""
+            size = struct.unpack("<I", head[4:8])[0]
+            data = fh.read(min(size, 4 * 1024 * 1024))
+    except OSError:
+        return ""
+    pos = 0
+    while pos + 6 <= len(data):
+        sig = data[pos:pos + 4]
+        sub = struct.unpack("<H", data[pos + 4:pos + 6])[0]
+        pos += 6
+        if sig == b"XXXX" and sub == 4:
+            real = struct.unpack("<I", data[pos:pos + 4])[0]
+            pos += 4
+            if pos + 6 > len(data):
+                break
+            sig = data[pos:pos + 4]
+            pos += 6
+            sub = real
+        payload = data[pos:pos + sub]
+        pos += sub
+        if sig == b"SNAM":
+            return payload.split(b"\x00", 1)[0].decode("cp1252", "replace")
+    return ""
+
+
+def patch_signals(name: str, mod_path: str, categories) -> List[str]:
+    """Every reason a mod counts as a patch (from MO2 Patch Tagger): a plugin header that says patch, a plugin file
+    name that does, the mod's own name, or the MO2 category Patches. [] when none."""
+    reasons = []
+    try:
+        files = [f for f in os.listdir(mod_path) if f.lower().endswith((".esp", ".esm", ".esl")) and os.path.isfile(os.path.join(mod_path, f))]
+    except OSError:
+        files = []
+    by_header = [f for f in files if says_patch(read_plugin_description(os.path.join(mod_path, f)))]
+    by_file = [f for f in files if says_patch(os.path.splitext(f)[0])]
+    if by_header:
+        reasons.append("header says patch: " + ", ".join(by_header))
+    if by_file:
+        reasons.append("file name: " + ", ".join(by_file))
+    if says_patch(get_base_mod_name(name)):
+        reasons.append("mod name")
+    try:
+        if any(str(c).strip().lower() == "patches" for c in (categories or [])):
+            reasons.append("category Patches")
+    except Exception:  # noqa: BLE001
+        pass
+    return reasons
 
 
 def strip_plugin_type_tag(name: str) -> str:
@@ -272,12 +353,17 @@ def strip_leading_numbers(name: str) -> str:
     return name
 
 
-def format_tag(name: str, pos: int, plugin_type: str = "") -> str:
-    """Format a mod name with [NoDelete] tag, sequence number, and optional plugin type."""
+def format_tag(name: str, pos: int, plugin_type: str = "", patch: bool = False) -> str:
+    """A NoDelete name: the tag, the number, then the keyword chain - plugin type first, [Patch] after it (the owner,
+    2026-09-23: "the patch keyword added to the end like the esm, esl tags") - then the mod's own name."""
     seq = f"{pos:04d}"
-    if plugin_type:
-        return f"{TAG_PREFIX} {seq} [{plugin_type}] {name}"
-    return f"{TAG_PREFIX} {seq} {name}"
+    chain = (f"[{plugin_type}] " if plugin_type else "") + (f"{PATCH_TAG} " if patch else "")
+    return f"{TAG_PREFIX} {seq} {chain}{name}"
+
+
+def format_plain(name: str, patch: bool) -> str:
+    """A name outside NoDelete: "[Patch] Name" or the bare name."""
+    return f"{PATCH_TAG} {name}" if patch else name
 
 
 def make_fallback_icon() -> QIcon:
@@ -298,7 +384,7 @@ def make_fallback_icon() -> QIcon:
     return QIcon(pix)
 
 
-class NoDeleteDialog(QDialog):
+class KeywordDialog(QDialog):
     """The one window (the owner, 2026-09-22: "make it use one main popup and not the successive windows popup").
 
     Everything the button used to ask in a chain of message boxes is on this dialog: the action, the plugin-type
@@ -308,7 +394,7 @@ class NoDeleteDialog(QDialog):
     def __init__(self, plugin, parent=None):
         super().__init__(parent)
         self._p = plugin
-        self.setWindowTitle("MO2 [NoDelete] Tag Generator")
+        self.setWindowTitle("MO2 Keyword Tagger")
         self.resize(980, 680)
         self._build()
         self.refresh_state()
@@ -332,13 +418,25 @@ class NoDeleteDialog(QDialog):
         al.addWidget(self.c_remove_all)
         row.addWidget(act, 3)
 
-        pt = QGroupBox("Plugin type tags ([ESM] [ESP] [ESL])")
+        pt = QGroupBox("Keyword tags ([ESM] [ESP] [ESL] and [Patch])")
         pl = QVBoxLayout(pt)
+        pl.addWidget(QLabel("Plugin type ([ESM] [ESP] [ESL]):"))
         self.r_pt_keep = QRadioButton("Keep as they are")
         self.r_pt_add = QRadioButton("Add / update from the plugin files")
         self.r_pt_strip = QRadioButton("Remove")
         self.r_pt_keep.setChecked(True)
+        pt_group = QButtonGroup(pt)
         for w in (self.r_pt_keep, self.r_pt_add, self.r_pt_strip):
+            pt_group.addButton(w)
+            pl.addWidget(w)
+        pl.addWidget(QLabel("[Patch] - every mod in the list, tagged or not:"))
+        self.r_patch_keep = QRadioButton("Keep as it is")
+        self.r_patch_add = QRadioButton("Add / update where a header, file name, mod name or category says patch")
+        self.r_patch_strip = QRadioButton("Remove")
+        self.r_patch_keep.setChecked(True)
+        patch_group = QButtonGroup(pt)
+        for w in (self.r_patch_keep, self.r_patch_add, self.r_patch_strip):
+            patch_group.addButton(w)
             pl.addWidget(w)
         row.addWidget(pt, 2)
         root.addLayout(row)
@@ -374,7 +472,7 @@ class NoDeleteDialog(QDialog):
         root.addLayout(buttons)
 
         for w in (self.r_tag, self.r_remove, self.c_remove_all, self.r_pt_keep, self.r_pt_add, self.r_pt_strip,
-                  self.c_restore, self.c_update_map):
+                  self.r_patch_keep, self.r_patch_add, self.r_patch_strip, self.c_restore, self.c_update_map):
             w.toggled.connect(self.refresh_preview)
         self.b_apply.clicked.connect(self.apply)
         self.b_close.clicked.connect(self.close)
@@ -385,7 +483,7 @@ class NoDeleteDialog(QDialog):
         st = self._p.read_state()
         self._st = st
         self.summary.setText(
-            f"{len(st['full_order'])} entries in the list - {len(st['tagged'])} carry [NoDelete] - "
+            f"{len(st['full_order'])} entries in the list - {len(st['tagged'])} carry [NoDelete] - {len(st['patched'])} carry [Patch] - "
             f"{len(st['sel'])} selected - {len(st['sep_all'])} under a NoDelete separator "
             f"({len(st['sep_untagged'])} of them untagged)"
             + ("" if st['sep_all'] or st['has_sep'] else " - no separator named NoDelete in the list"))
@@ -398,10 +496,12 @@ class NoDeleteDialog(QDialog):
 
     def options(self):
         pt = "add" if self.r_pt_add.isChecked() else "remove" if self.r_pt_strip.isChecked() else "keep"
+        patch = "add" if self.r_patch_add.isChecked() else "remove" if self.r_patch_strip.isChecked() else "keep"
         return {
             "action": "remove" if self.r_remove.isChecked() else "tag",
             "remove_all": self.c_remove_all.isChecked(),
             "plugin_types": pt,
+            "patch": patch,
             "restore": self.c_restore.isChecked(),
             "update_map": self.c_update_map.isChecked(),
         }
@@ -427,6 +527,9 @@ class NoDeleteDialog(QDialog):
             what.append("separator map saved")
         self.preview_label.setText("Apply will do: " + (", ".join(what) if what else "nothing - the list is already as asked"))
         self.b_apply.setEnabled(bool(what))
+        # the Action radios and the plugin-type radios concern NoDelete; the [Patch] radios work on every mod
+        for w in (self.r_patch_keep, self.r_patch_add, self.r_patch_strip):
+            w.setEnabled(True)
 
     def apply(self):
         o = self.options()
@@ -443,7 +546,7 @@ class NoDeleteDialog(QDialog):
         self.status.setText("\n".join(lines))
 
 
-class NoDeleteTagGenerator(mobase.IPluginTool):
+class KeywordTagger(mobase.IPluginTool):
     def __init__(self):
         super().__init__()
         self._organizer: Optional[mobase.IOrganizer] = None
@@ -470,14 +573,15 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
         return True
 
     def name(self) -> str:
-        return "MO2 [NoDelete] Tag Generator"
+        return "MO2 Keyword Tagger"
 
     def author(self) -> str:
         return "ApocryphaRealm"
 
     def description(self) -> str:
-        return ("Tags selected mods, and every mod under a separator named NoDelete, with [NoDelete] and a number in list order; "
-                "one dialog, one on-disk rename pass, one refresh. Removes the tag and number the same way.")
+        return ("Keyword tags for mod names in one dialog: [NoDelete] with a number for the selected mods and everything under "
+                "a separator named NoDelete, the plugin-type tags [ESM] [ESP] [ESL], and [Patch] for every mod that is a "
+                "patch (header, file name, mod name or category). One on-disk rename pass, one refresh; removes them the same way.")
 
     def version(self) -> mobase.VersionInfo:
         return mobase.VersionInfo(1, 0, 0, mobase.ReleaseType.FINAL)
@@ -489,14 +593,14 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
         return []
 
     def displayName(self) -> str:
-        return "MO2 [NoDelete] Tag Generator"
+        return "MO2 Keyword Tagger"
 
     def tooltip(self) -> str:
-        return "Give the selected mods, and the NoDelete separator's contents, the [NoDelete] tag and number"
+        return "Keyword tags: [NoDelete] and its number, [ESM] [ESP] [ESL], and [Patch] - add, update or remove"
 
     def icon(self) -> QIcon:
         here = os.path.dirname(__file__)
-        p = os.path.join(here, "MO2NoDeleteTagGenerator.png")
+        p = os.path.join(here, "MO2KeywordTagger.png")
         if os.path.exists(p):
             return QIcon(p)
         return make_fallback_icon()
@@ -511,12 +615,12 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
         if not self._organizer:
             return
         try:
-            dlg = NoDeleteDialog(self, self._parent_widget)
+            dlg = KeywordDialog(self, self._parent_widget)
             dlg.exec()
         except Exception as e:
             import traceback
             self._log(f"Error in display: {e}\n{traceback.format_exc()}")
-            QMessageBox.warning(self._parent_widget, "NoDelete Error", f"Error: {e}")
+            QMessageBox.warning(self._parent_widget, "Keyword Tagger Error", f"Error: {e}")
 
     # ---- the facts the dialog works from ----------------------------------------------------------------------
     def read_state(self) -> dict:
@@ -529,6 +633,7 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
         # A separator is never renamed: the NoDelete separator itself is named "[NoDelete]" and must stay exactly that
         # (1.0.1 - the 1.0.0 preview offered "[NoDelete]_separator -> [NoDelete] 0001 _separator").
         tagged = [nm for nm in full_order if nm.lower().startswith(TAG_PREFIX.lower()) and not is_separator(nm)]
+        patched = [nm for nm in full_order if has_patch_tag(nm) and not is_separator(nm)]
         sep_all = mods_under_nodelete_separators(full_order)
         sep_untagged = [nm for nm in sep_all if not nm.lower().startswith(TAG_PREFIX.lower())]
         has_sep = any(is_nodelete_separator(nm) for nm in full_order)
@@ -546,43 +651,79 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
             home = divider_map.get(get_base_mod_name(nm))
             if home and home in full_order and current.get(nm) != home:
                 out_of_place.append((nm, home))
-        return {"full_order": full_order, "sel": sel, "tagged": tagged, "sep_all": sep_all,
+        return {"full_order": full_order, "sel": sel, "tagged": tagged, "patched": patched, "sep_all": sep_all,
                 "sep_untagged": sep_untagged, "has_sep": has_sep, "out_of_place": out_of_place,
                 "divider_map": divider_map}
 
     def plan(self, st: dict, o: dict) -> List[tuple]:
         """[(old name, new name)] for the chosen action - nothing is touched here."""
         full_order, tagged, sel = st["full_order"], st["tagged"], st["sel"]
+        ml = self._organizer.modList()
+
+        def patch_for(nm: str, current: bool) -> bool:
+            """Whether nm carries [Patch] after this run, under the [Patch] option."""
+            if o.get("patch", "keep") == "remove":
+                return False
+            if o.get("patch", "keep") == "add":
+                if current:
+                    return True
+                mod = ml.getMod(nm)
+                if mod is None:
+                    return False
+                try:
+                    return bool(patch_signals(nm, mod.absolutePath(), mod.categories()))
+                except Exception:  # noqa: BLE001
+                    return False
+            return current
+
         if o["action"] == "remove":
             chosen = [nm for nm in sel if nm in tagged]
             if o["remove_all"] or not chosen:
                 chosen = list(tagged)
             pairs = []
             for nm in chosen:
-                base = strip_leading_numbers(strip_plugin_type_tag(strip_existing_tag(nm)))
-                if base and base != nm:
-                    pairs.append((nm, base))
+                base = get_base_mod_name(nm)
+                new = format_plain(base, patch_for(nm, has_patch_tag(nm)))
+                if base and new != nm:
+                    pairs.append((nm, new))
+            done = {old for old, _ in pairs}
+            if o.get("patch", "keep") != "keep":
+                for nm in full_order:
+                    if is_separator(nm) or nm in done or nm.lower().startswith(TAG_PREFIX.lower()):
+                        continue
+                    new = format_plain(strip_patch_tag(nm), patch_for(nm, has_patch_tag(nm)))
+                    if new != nm:
+                        pairs.append((nm, new))
             return pairs
         newly = [nm for nm in full_order if (nm in sel or nm in st["sep_untagged"]) and nm not in tagged
                  and not is_separator(nm)]
         to_process = [nm for nm in full_order if nm in tagged or nm in newly]
         pairs = []
         for i, nm in enumerate(to_process, start=1):
-            base = strip_leading_numbers(strip_plugin_type_tag(strip_existing_tag(nm)))
+            base = get_base_mod_name(nm)
             existing = ""
-            m = re.match(r'^\[NoDelete\]\s*\d{4}\s+(?:\[([^\]]+)\]\s+)?', nm, re.IGNORECASE)
+            m = re.match(r'^\[NoDelete\]\s*\d{4}\s+(?:\[(ESM|ESP|ESL|ESM\+ESP|ESM\+ESL|ESP\+ESL|ESM\+ESP\+ESL)\]\s+)?', nm, re.IGNORECASE)
             if m and m.group(1):
                 existing = m.group(1)
             if o["plugin_types"] == "add":
-                mod = self._organizer.modList().getMod(nm)
+                mod = ml.getMod(nm)
                 ptype = get_mod_plugin_types(mod.absolutePath()) if mod else existing
             elif o["plugin_types"] == "remove":
                 ptype = ""
             else:
                 ptype = existing
-            new = format_tag(base, i, ptype)
+            new = format_tag(base, i, ptype, patch_for(nm, has_patch_tag(nm)))
             if new != nm:
                 pairs.append((nm, new))
+        # [Patch] on every other mod in the list, as a prefix (MO2 Patch Tagger's convention, kept)
+        if o.get("patch", "keep") != "keep":
+            handled = set(to_process)
+            for nm in full_order:
+                if is_separator(nm) or nm in handled:
+                    continue
+                new = format_plain(strip_patch_tag(nm), patch_for(nm, has_patch_tag(nm)))
+                if new != nm:
+                    pairs.append((nm, new))
         return pairs
 
     def execute(self, st: dict, o: dict, pairs: List[tuple]) -> List[str]:
@@ -673,7 +814,7 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
                 before[old] = None
         org.refresh(True)   # let MO2 write anything pending first, so the lists on disk are current
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        backup_dir = os.path.join(org.basePath(), "plugins", "data", "MO2NoDeleteTagGenerator", "backups", stamp)
+        backup_dir = os.path.join(org.basePath(), "plugins", "data", "MO2KeywordTagger", "backups", stamp)
         profiles = []
         for prof in sorted(os.listdir(profiles_dir)):
             lst = os.path.join(profiles_dir, prof, "modlist.txt")
@@ -727,7 +868,7 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
                   + (f" | PRIORITY CHANGED: {'; '.join(moved)}" if moved else " | every renamed mod kept its priority"))
         return (f"Renamed {len(renamed)} of {len(pairs)} mod(s); {touched} profile list(s) updated.\n"
                 + (f"{len(failed)} could not be renamed (see the log).\n" if failed else "")
-                + (f"{len(moved)} changed priority - see the log and the backups in plugins\\data\\MO2NoDeleteTagGenerator\\backups.\n"
+                + (f"{len(moved)} changed priority - see the log and the backups in plugins\\data\\MO2KeywordTagger\\backups.\n"
                    if moved else "Every renamed mod kept its place in the list.\n"))
 
     def _get_selected_mods_from_ui(self) -> List[str]:
@@ -863,7 +1004,7 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
         self._toolbar_action = act
         btn = tb.widgetForAction(act)
         if isinstance(btn, QToolButton):
-            btn.setObjectName("MO2NoDeleteTagGeneratorBtn")
+            btn.setObjectName("MO2KeywordTaggerBtn")
             # No stylesheet of its own: the button is an ordinary toolbar button drawn by MO2's theme, like every
             # other one (2026-09-22, "no delete button is the wrong color").
             btn.setAutoRaise(True)
@@ -879,7 +1020,7 @@ class NoDeleteTagGenerator(mobase.IPluginTool):
 
 
 def createPlugin():
-    return NoDeleteTagGenerator()
+    return KeywordTagger()
 
 
 # --- fault handling (standing rule, 2026-09-23: every MO2 plugin of ours logs and arms faulthandler) ---------------
