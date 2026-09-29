@@ -1,6 +1,6 @@
 MO2 Keyword Tagger
 ==================
-Version 1.0.3
+Version 1.0.4
 
 A Mod Organizer 2 plugin: one toolbar button and one dialog for the keyword tags in mod names -
 [NoDelete] with a number in list order (Wabbajack's convention), the plugin-type tags [ESM] [ESP]
@@ -57,7 +57,10 @@ plugins\data\faults.log (Python's fault handler, so a crash names the plugin and
 WHAT CHANGED
 ------------
 
-Version 1.0.3
+Version 1.0.4
+Changed: the toolbar button follows MO2's theme: its icon is painted in the colour the current theme or stylesheet gives toolbar buttons and repainted when that changes, and the button is put back if MO2 rebuilds its toolbar.
+
+Version 1.0.3 (not released on its own - its fix ships in 1.0.4)
 Fixed: an instance that keeps its profiles somewhere other than directly under its own folder (MO2 Settings > Paths, e.g. Mo2/SSE/profiles) failed to rename: the profiles folder was taken as basePath()/profiles. It is now the folder MO2 itself uses (the parent of the active profile's folder), as MO2's own rename does. Found from the Nexus report by Mordre on MO2 Modlist Manager, 2026-09-29.
 
 Version 1.0.2

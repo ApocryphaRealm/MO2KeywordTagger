@@ -2,7 +2,11 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.3 - 2026-09-29
+## 1.0.4 - 2026-09-29
+
+* Changed: the toolbar button follows MO2's theme: its icon is painted in the colour the current theme or stylesheet gives toolbar buttons and repainted when that changes, and the button is put back if MO2 rebuilds its toolbar. (gate rule mo2-plugin-toolbar-icon-follows-the-theme; the owner, 2026-09-26.)
+
+## 1.0.3 - 2026-09-29 - tagged, not released on its own (its fix ships in 1.0.4)
 
 * Fixed: an instance that keeps its profiles somewhere other than directly under its own folder (MO2 Settings > Paths, e.g. Mo2/SSE/profiles) failed to rename: the profiles folder was taken as basePath()/profiles. It is now the folder MO2 itself uses (the parent of the active profile's folder), as MO2's own rename does. Found from the Nexus report by Mordre on MO2 Modlist Manager, 2026-09-29.
 

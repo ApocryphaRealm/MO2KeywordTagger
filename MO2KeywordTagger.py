@@ -7,7 +7,7 @@ number the same way. Tagged mods remember the separator they were tagged under a
 
 Copyright (C) 2026 ApocryphaRealm. GPL-3.0-or-later - see LICENSE and NOTICE.md.
 """
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 import json
 import os
@@ -22,7 +22,7 @@ import mobase
 # Qt imports (same as before) Ã¢â‚¬Â¦
 try:
     from PyQt6.QtCore import Qt, QTimer, QSize
-    from PyQt6.QtGui import QAction, QIcon, QPainter, QColor, QPixmap, QFont
+    from PyQt6.QtGui import QAction, QIcon, QPainter, QColor, QPixmap, QFont, QPalette
     from PyQt6.QtWidgets import (
         QApplication,
         QMainWindow,
@@ -48,7 +48,7 @@ try:
     QT6 = True
 except Exception:
     from PyQt5.QtCore import Qt, QTimer, QSize  # type: ignore
-    from PyQt5.QtGui import QAction, QIcon, QPainter, QColor, QPixmap, QFont  # type: ignore
+    from PyQt5.QtGui import QAction, QIcon, QPainter, QColor, QPixmap, QFont, QPalette  # type: ignore
     from PyQt5.QtWidgets import (
         QApplication,
         QMainWindow,
@@ -565,6 +565,7 @@ class KeywordTagger(mobase.IPluginTool):
         self._organizer: Optional[mobase.IOrganizer] = None
         self._parent_widget: Optional[QWidget] = None
         self._toolbar_action = None
+        self._icon_colour = None      # the colour the button's icon is painted in now
         self._btn: Optional[QToolButton] = None
         self._main_window: Optional[QMainWindow] = None
 
@@ -979,9 +980,13 @@ class KeywordTagger(mobase.IPluginTool):
         return sel
 
     def _attempt_toolbar_injection(self):
-        if self._toolbar_action:
-            self._inject_timer.stop()
-            return
+        if self._toolbar_action is not None and self._main_window is not None:
+            tbs = self._main_window.findChildren(QToolBar)
+            if tbs and self._toolbar_action in tbs[0].actions():
+                self._inject_timer.setInterval(2000)     # in place: keep an eye on it and on the theme it is drawn in
+                self._tint_button(tbs[0])
+                return
+            self._toolbar_action = None                  # MO2 rebuilt its toolbar and dropped the button: add it again
         app = QApplication.instance()
         if not app:
             return
@@ -1039,6 +1044,48 @@ class KeywordTagger(mobase.IPluginTool):
             btn.setAutoRaise(True)
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
             btn.setIconSize(tb.iconSize())
+        self._icon_colour = None
+        self._tint_button(tb)
+
+    # THE BUTTON FOLLOWS THE THEME (the owner, 2026-09-26: "make sure that the button that's included with the plugin
+    # responds to theme changes and style sheet changes"; gate rule mo2-plugin-toolbar-icon-follows-the-theme, 1.0.3).
+    # The PNG is only the SHAPE: its alpha is filled with the colour MO2's current stylesheet gives this toolbar button
+    # (the palette Qt resolves from the QSS on polish - button text, else window text), repainted whenever that colour
+    # changes. The button is re-checked every two seconds, so a theme switch, a .qss edit or a toolbar rebuild reach it.
+    # The same as MO2 Modlist Manager's _themed_icon / _button_colour / _tint_button.
+    def _themed_icon(self, colour):
+        src = QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)), "MO2KeywordTagger.png"))
+        if src.isNull():
+            return self.icon()
+        out = QPixmap(src.size())
+        out.fill(QColor(0, 0, 0, 0))
+        p = QPainter(out)
+        p.drawPixmap(0, 0, src)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        p.fillRect(out.rect(), colour)
+        p.end()
+        return QIcon(out)
+
+    def _button_colour(self, widget):
+        widget.ensurePolished()
+        pal = widget.palette()
+        c = pal.color(QPalette.ColorRole.ButtonText)
+        if not c.isValid() or c.alpha() == 0:
+            c = pal.color(QPalette.ColorRole.WindowText)
+        return c
+
+    def _tint_button(self, tb):
+        act = self._toolbar_action
+        btn = tb.widgetForAction(act) if act is not None else None
+        if btn is None:
+            return
+        c = self._button_colour(btn)
+        key = c.name(QColor.NameFormat.HexArgb)
+        if key == self._icon_colour:
+            return
+        act.setIcon(self._themed_icon(c))
+        self._icon_colour = key
+        self._log(f"toolbar icon painted in {key} (the theme's button colour)")
 
     def _log(self, msg: str):
         try:
