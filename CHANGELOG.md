@@ -2,6 +2,10 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
+## 1.0.3 - 2026-09-29
+
+* Fixed: an instance that keeps its profiles somewhere other than directly under its own folder (MO2 Settings > Paths, e.g. Mo2/SSE/profiles) failed to rename: the profiles folder was taken as basePath()/profiles. It is now the folder MO2 itself uses (the parent of the active profile's folder), as MO2's own rename does. Found from the Nexus report by Mordre on MO2 Modlist Manager, 2026-09-29.
+
 ## 1.0.2 - 2026-09-23
 
 * `[NoDelete]` is the only prefix; the plugin-type tag and `[Patch]` are suffixes after the mod's own name (the

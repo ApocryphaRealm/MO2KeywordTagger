@@ -7,7 +7,7 @@ number the same way. Tagged mods remember the separator they were tagged under a
 
 Copyright (C) 2026 ApocryphaRealm. GPL-3.0-or-later - see LICENSE and NOTICE.md.
 """
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 import json
 import os
@@ -830,7 +830,11 @@ class KeywordTagger(mobase.IPluginTool):
         org = self._organizer
         ml = org.modList()
         mods_dir = org.modsPath()
-        profiles_dir = os.path.join(org.basePath(), "profiles")
+        # every profile, where MO2 keeps them: Profile::renameModInAllProfiles walks Settings::paths().profiles(), which
+        # ModOrganizer.ini's profiles_directory may put anywhere (src/profile.cpp, src/settings.cpp at v2.5.2) - so the
+        # parent of the active profile's folder, never basePath()/profiles (1.0.3: an instance with its profiles in
+        # Mo2/SSE/profiles found none - the same bug as the Nexus report on MO2 Modlist Manager, 2026-09-29)
+        profiles_dir = os.path.dirname(os.path.normpath(org.profilePath()))
         before = {}
         for old, _new in pairs:
             try:
